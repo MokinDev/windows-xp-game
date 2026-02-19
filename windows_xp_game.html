@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows XP Memory Match</title>
+    <style>
+        body {
+            font-family: "Comic Sans MS", cursive, sans-serif;
+            background-color: #008080;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: white;
+            text-shadow: 2px 2px 4px #000000;
+        }
+        .game-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        .card {
+            width: 80px;
+            height: 80px;
+            background-color: #C0C0C0;
+            border: 2px solid #808080;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 24px;
+            user-select: none;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .card.hidden {
+            background-color: #008080;
+        }
+        .card.flipped {
+            background-color: white;
+        }
+        .card.matched {
+            background-color: #00FF00;
+            cursor: default;
+        }
+        #stats {
+            margin: 20px 0;
+            font-size: 18px;
+        }
+        #restart, #high-scores-btn {
+            margin: 10px;
+            padding: 10px 20px;
+            background-color: #C0C0C0;
+            border: 2px solid #808080;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: "Comic Sans MS", cursive, sans-serif;
+        }
+        #restart:hover, #high-scores-btn:hover {
+            background-color: #A0A0A0;
+        }
+        #win-message {
+            display: none;
+            margin: 20px 0;
+            font-size: 24px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px #000000;
+        }
+        #high-scores {
+            display: none;
+            margin: 20px auto;
+            max-width: 300px;
+            background-color: #C0C0C0;
+            border: 2px solid #808080;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: left;
+        }
+        .high-score-entry {
+            padding: 5px;
+            border-bottom: 1px solid #808080;
+        }
+    </style>
+</head>
+<body>
+    <h1>Windows XP Memory Match</h1>
+    <p>Match the classic Windows XP icons!</p>
+    <div id="stats">
+        Moves: <span id="moves">0</span> |
+        Time: <span id="time">0</span>s
+    </div>
+    <div id="win-message">
+        You did it! 🎉 All icons matched in <span id="final-time">0</span> seconds and <span id="final-moves">0</span> moves!
+    </div>
+    <div class="game-container" id="game"></div>
+    <div>
+        <button id="restart">Restart Game</button>
+        <button id="high-scores-btn">Show High Scores</button>
+    </div>
+    <div id="high-scores"></div>
+
+    <script>
+        // Sound effects
+        const flipSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3');
+        const matchSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3');
+        const winSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-winning-level-video-game-2058.mp3');
+
+        const icons = [
+            '🖥️', '📁', '📄', '🖨️',
+            '💾', '🎵', '🖼️', '🌐',
+            '📜', '🗑️', '🔍', '📧'
+        ];
+
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let moves = 0;
+        let time = 0;
+        let timer;
+        let highScores = JSON.parse(localStorage.getItem('highScores')) || [];
+
+        // Shuffle cards
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // Start the timer
+        function startTimer() {
+            time = 0;
+            document.getElementById('time').textContent = time;
+            timer = setInterval(() => {
+                time++;
+                document.getElementById('time').textContent = time;
+            }, 1000);
+        }
+
+        // Stop the timer
+        function stopTimer() {
+            clearInterval(timer);
+        }
+
+        // Play sound
+        function playSound(sound) {
+            sound.currentTime = 0;
+            sound.play();
+        }
+
+        // Create the game board
+        function createGame() {
+            stopTimer();
+            cards = shuffle([...icons, ...icons]);
+            const gameContainer = document.getElementById('game');
+            gameContainer.innerHTML = '';
+            flippedCards = [];
+            matchedPairs = 0;
+            moves = 0;
+            document.getElementById('moves').textContent = moves;
+            document.getElementById('win-message').style.display = 'none';
+
+            cards.forEach((icon, index) => {
+                const card = document.createElement('div');
+                card.className = 'card hidden';
+                card.dataset.index = index;
+                card.textContent = icon;
+                card.addEventListener('click', () => {
+                    flipCard(card);
+                });
+                gameContainer.appendChild(card);
+            });
+
+            startTimer();
+        }
+
+        // Flip a card
+        function flipCard(card) {
+            if (flippedCards.length < 2 && !card.classList.contains('flipped') && !card.classList.contains('matched')) {
+                card.classList.remove('hidden');
+                card.classList.add('flipped');
+                flippedCards.push(card);
+                playSound(flipSound);
+
+                if (flippedCards.length === 2) {
+                    moves++;
+                    document.getElementById('moves').textContent = moves;
+                    checkMatch();
+                }
+            }
+        }
+
+        // Check if the flipped cards match
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            if (card1.textContent === card2.textContent) {
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                matchedPairs++;
+                playSound(matchSound);
+
+                if (matchedPairs === icons.length) {
+                    stopTimer();
+                    document.getElementById('final-time').textContent = time;
+                    document.getElementById('final-moves').textContent = moves;
+                    document.getElementById('win-message').style.display = 'block';
+                    playSound(winSound);
+
+                    // Save high score
+                    saveHighScore(time, moves);
+                }
+            } else {
+                setTimeout(() => {
+                    card1.classList.remove('flipped');
+                    card1.classList.add('hidden');
+                    card2.classList.remove('flipped');
+                    card2.classList.add('hidden');
+                }, 1000);
+            }
+            flippedCards = [];
+        }
+
+        // Save high score
+        function saveHighScore(time, moves) {
+            const score = { time, moves };
+            highScores.push(score);
+            highScores.sort((a, b) => a.time - b.time || a.moves - b.moves);
+            if (highScores.length > 5) {
+                highScores = highScores.slice(0, 5);
+            }
+            localStorage.setItem('highScores', JSON.stringify(highScores));
+        }
+
+        // Show high scores
+        function showHighScores() {
+            const highScoresDiv = document.getElementById('high-scores');
+            highScoresDiv.innerHTML = '<h3>High Scores</h3>';
+            if (highScores.length === 0) {
+                highScoresDiv.innerHTML += '<p>No high scores yet!</p>';
+            } else {
+                highScores.forEach((score, index) => {
+                    highScoresDiv.innerHTML += `
+                        <div class="high-score-entry">
+                            #${index + 1}: ${score.time} seconds, ${score.moves} moves
+                        </div>
+                    `;
+                });
+            }
+            highScoresDiv.style.display = 'block';
+        }
+
+        // Event listeners
+        document.getElementById('restart').addEventListener('click', createGame);
+        document.getElementById('high-scores-btn').addEventListener('click', showHighScores);
+
+        // Start the game
+        createGame();
+    </script>
+</body>
+</html>
